@@ -1,0 +1,78 @@
+SchemaVersion: 2018-07-01
+Owner: "@mongodb/repl"
+
+Clients:
+  Default:
+    QueryOptions:
+      maxPoolSize: 10000
+
+Actors:
+- Name: ParallelInsert-1
+  Type: RunCommand
+  Threads: 1
+  Phases:
+{%- for i in range(iteration) %}
+  - &Insert_WMajority_{{i}}
+    MetricsName: Insert_WMajority_{{i}}
+    Duration: 30 seconds
+    Database: test
+    Operations:
+    - OperationName: RunCommand
+      OperationIsQuiet: true
+      OperationCommand:
+        insert: myCollection
+        documents: &Doc_{{i}} [{a: {^FastRandomString: {length: 100}}}]
+        writeConcern: {w: majority}
+  - &Nop_{{i}} {Nop: true}
+{%- endfor %}
+  - Phase: {{ iteration * 2 }}..{{ total_phase - 1 }}
+    Nop: true
+
+{%- set ns = namespace(phase = iteration * 2) %}
+{% for t in threads -%}
+{%- if t == 1 %}{% continue %}{% endif %}
+- Name: ParallelInsert-{{ t }}
+  Type: RunCommand
+  Threads: {{ t }}
+  Phases:
+  - Phase: 0..{{ ns.phase - 1}}
+    Nop: true
+{%- for i in range(iteration) %}
+  - *Insert_WMajority_{{i}}
+  - *Nop_0
+{%- endfor %}
+{%- if ns.phase + iteration * 2 < total_phase %}
+  - Phase: {{ ns.phase + iteration * 2 }}..{{ total_phase - 1 }}
+    Nop: true
+
+{%- endif %}
+{%- set ns.phase = ns.phase + iteration * 2 %}
+{% endfor %}
+
+- Name: CleanUp
+  Type: RunCommand
+  Threads: 1
+  Phases:
+  - *Nop_0
+  - &DropCollection
+    Repeat: 1
+    Database: test
+    Operations:
+    - OperationName: RunCommand
+      OperationCommand:
+        drop: myCollection
+        writeConcern: {w: majority}
+{%- for i in range((total_phase - 2) // 2) %}
+  - *Nop_0
+  - *DropCollection
+{%- endfor %}
+
+AutoRun:
+  Requires:
+    mongodb_setup:
+    - replica
+    - replica-noflowcontrol
+  PrepareEnvironmentWith:
+    mongodb_setup:
+    - replica-delay-mixed
+    - replica
