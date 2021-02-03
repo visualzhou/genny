@@ -1,0 +1,95 @@
+SchemaVersion: 2018-07-01
+Owner: "@mongodb/repl"
+
+Clients:
+  Default:
+    QueryOptions:
+      maxPoolSize: 10000
+
+randomInt: &randomInt {^RandomInt: {min: -10000000, max: 10000000}}
+
+{%- set total_ns = namespace(total_phase = (threads|length) * (iteration * 2) + 1) %}
+Actors:
+- Name: ParallelIndexedInsert-1
+  Type: RunCommand
+  Threads: 1
+  Phases:
+  - &Nop_0 {Nop: true}
+{%- for i in range(iteration) %}
+  - &Insert_WMajority_{{i}}
+    MetricsName: Insert_WMajority_{{i}}
+    Duration: 30 seconds
+    Database: test
+    Operations:
+    - OperationName: RunCommand
+      OperationIsQuiet: true
+      OperationCommand:
+        insert: myIndexedCollection
+        documents: &Doc_{{i}} [{text: {^FastRandomString: {length: 1000}}, a: *randomInt, b: *randomInt, c: *randomInt, d: *randomInt, e: *randomInt}]
+        writeConcern: {w: majority}
+  - *Nop_0
+{%- endfor %}
+{%- if (threads|length) > 1 %}
+  - Phase: {{ iteration * 2 + 1}}..{{ total_ns.total_phase - 1 }}
+    Nop: true
+{% endif %}
+
+{%- set ns = namespace(start_phase = iteration * 2 + 1) %}
+{% for t in threads -%}
+{%- if t == 1 %}{% continue %}{% endif %}
+- Name: ParallelIndexedInsert-{{ t }}
+  Type: RunCommand
+  Threads: {{ t }}
+  Phases:
+  - Phase: 0..{{ ns.start_phase - 1}}
+    Nop: true
+{%- for i in range(iteration) %}
+  - *Insert_WMajority_{{i}}
+  - *Nop_0
+{%- endfor %}
+{%- if ns.start_phase + iteration * 2 < total_ns.total_phase %}
+  - Phase: {{ ns.start_phase + iteration * 2 }}..{{ total_ns.total_phase - 1 }}
+    Nop: true
+
+{%- endif %}
+{%- set ns.start_phase = ns.start_phase + iteration * 2 %}
+{% endfor %}
+
+- Name: CleanUp
+  Type: RunCommand
+  Threads: 1
+  Phases:
+  - &DropCollection
+    Repeat: 1
+    Database: test
+    ThrowOnFailure: false
+    Operations:
+    - OperationName: RunCommand
+      OperationCommand:
+        drop: myIndexedCollection
+        writeConcern: {w: majority}
+    - OperationName: RunCommand
+      OperationCommand:
+        createIndexes: myIndexedCollection
+        indexes: [
+            {key: {a: 1}, name: "index_a"},
+            {key: {b: 1}, name: "index_b"},
+            {key: {c: 1}, name: "index_c"},
+            {key: {d: 1}, name: "index_d"},
+            {key: {e: 1}, name: "index_e"}
+        ]
+        writeConcern: {w: majority}
+{%- for i in range((total_ns.total_phase) // 2) %}
+  - *Nop_0
+  - *DropCollection
+{%- endfor %}
+
+AutoRun:
+  Requires:
+    mongodb_setup:
+    - replica
+    - replica-noflowcontrol
+  PrepareEnvironmentWith:
+    mongodb_setup:
+    - replica-delay-mixed
+    - replica
