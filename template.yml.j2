@@ -21,7 +21,7 @@ Actors:
       OperationIsQuiet: true
       OperationCommand:
         insert: myCollection
-        documents: &Doc_{{i}} [{a: {^FastRandomString: {length: 100}}}]
+        documents: &Doc_{{i}} [{a: {^FastRandomString: {length: 1000}}}]
         writeConcern: {w: majority}
   - &Nop_{{i}} {Nop: true}
 {%- endfor %}
