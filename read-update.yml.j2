@@ -9,7 +9,7 @@ Clients:
 randomInt: &randomInt {^RandomInt: {min: 0, max: 10000000}}
 randomId: &randomId {^RandomInt: {min: 0, max: 1000000}}
 docData: &docData {
-              text: {^FastRandomString: {length: 500}},
+              text: {^FastRandomString: {length: 1000}},
               a: *randomInt,
               b: *randomInt,
               c: *randomInt,
@@ -38,10 +38,10 @@ Actors:
       OperationIsQuiet: true
       OperationCommand:
         find: myIndexedUpdateCollection
-        # filter: { _id: { "$gte": *randomId } }
-        filter: { _id: { "$in": [*randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId] }, a: { "$gt": 0 } }
-        limit: 9
-        projection: { text: 0 }
+        filter: { _id: { "$gte": *randomId } }
+        # filter: { _id: { "$in": [*randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId ] }, a: { "$gt": 0 } }
+        limit: 100
+        projection: { _id: 1 }
     - OperationName: RunCommand
       OperationIsQuiet: true
       OperationCommand:
