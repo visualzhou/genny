@@ -14,11 +14,11 @@ docData: &docData {
               c: *randomInt,
               d: *randomInt,
               e: *randomInt,
-              f: *randomInt,
-              g: *randomInt,
-              h: *randomInt,
-              i: *randomInt,
-              j: *randomInt
+              # f: *randomInt,
+              # g: *randomInt,
+              # h: *randomInt,
+              # i: *randomInt,
+              # j: *randomInt
           }
 
 {%- set total_ns = namespace(total_phase = (threads|length) * (iteration * 2) + 1) %}
@@ -90,11 +90,11 @@ Actors:
             {key: {c: 1}, name: "index_c"},
             {key: {d: 1}, name: "index_d"},
             {key: {e: 1}, name: "index_e"},
-            {key: {f: 1}, name: "index_f"},
-            {key: {g: 1}, name: "index_g"},
-            {key: {h: 1}, name: "index_h"},
-            {key: {i: 1}, name: "index_i"},
-            {key: {j: 1}, name: "index_j"}
+            # {key: {f: 1}, name: "index_f"},
+            # {key: {g: 1}, name: "index_g"},
+            # {key: {h: 1}, name: "index_h"},
+            # {key: {i: 1}, name: "index_i"},
+            # {key: {j: 1}, name: "index_j"}
         ]
         writeConcern: {w: majority}
 {%- for i in range((total_ns.total_phase) // 2) %}

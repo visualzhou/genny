@@ -1,0 +1,81 @@
+SchemaVersion: 2018-07-01
+Owner: "@mongodb/repl"
+
+Clients:
+  Default:
+    QueryOptions:
+      maxPoolSize: 10000
+
+randomInt: &randomInt {^RandomInt: {min: 0, max: 10000000}}
+randomId: &randomId {^RandomInt: {min: 0, max: 1000000}}
+docData: &docData {
+              text: {^FastRandomString: {length: 1000}},
+              a: *randomInt,
+              b: *randomInt,
+              c: *randomInt,
+              d: *randomInt,
+              e: *randomInt
+              # f: *randomInt,
+              # g: *randomInt,
+              # h: *randomInt,
+              # i: *randomInt,
+              # j: *randomInt
+          }
+
+{%- set total_ns = namespace(total_phase = (threads|length) * (iteration * 1) + 0) %}
+Actors:
+- Name: ParallelIndexedUpdate-1
+  Type: RunCommand
+  Threads: 1
+  Phases:
+{%- for i in range(iteration) %}
+  - &Update_WMajority_{{i}}
+    MetricsName: Update_WMajority_{{i}}
+    Duration: 30 seconds
+    Database: test
+    Operations:
+    - OperationName: RunCommand
+      OperationIsQuiet: true
+      OperationCommand:
+        update: myIndexedUpdateCollection
+        updates: [
+            # { q: {a: *randomId}, u: { "$set": *docData, "$inc": {f: 1}} },
+            { q: {_id: *randomId}, u: *docData, },
+        ]
+        writeConcern: {w: majority}
+        # writeConcern: {w: majority, j: false}
+{%- endfor %}
+{%- if (threads|length) > 1 %}
+  - Phase: {{ iteration * 1 + 0}}..{{ total_ns.total_phase - 1 }}
+    Nop: true
+{% endif %}
+
+{%- set ns = namespace(start_phase = iteration * 1 + 0) %}
+{% for t in threads -%}
+{%- if t == 1 %}{% continue %}{% endif %}
+- Name: ParallelIndexedUpdate-{{ t }}
+  Type: RunCommand
+  Threads: {{ t }}
+  Phases:
+  - Phase: 0..{{ ns.start_phase - 1}}
+    Nop: true
+{%- for i in range(iteration) %}
+  - *Update_WMajority_{{i}}
+{%- endfor %}
+{%- if ns.start_phase + iteration * 1 < total_ns.total_phase %}
+  - Phase: {{ ns.start_phase + iteration * 1 }}..{{ total_ns.total_phase - 1 }}
+    Nop: true
+
+{%- endif %}
+{%- set ns.start_phase = ns.start_phase + iteration * 1 %}
+{% endfor %}
+
+AutoRun:
+  Requires:
+    mongodb_setup:
+    - replica
+    - replica-noflowcontrol
+  PrepareEnvironmentWith:
+    mongodb_setup:
+    - replica-delay-mixed
+    - replica

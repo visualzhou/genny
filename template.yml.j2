@@ -6,6 +6,7 @@ Clients:
     QueryOptions:
       maxPoolSize: 10000
 
+{%- set total_ns = namespace(total_phase = (threads|length) * (iteration * 2)) %}
 Actors:
 - Name: ParallelInsert-1
   Type: RunCommand
@@ -25,7 +26,7 @@ Actors:
         writeConcern: {w: majority}
   - &Nop_{{i}} {Nop: true}
 {%- endfor %}
-  - Phase: {{ iteration * 2 }}..{{ total_phase - 1 }}
+  - Phase: {{ iteration * 2 }}..{{ total_ns.total_phase - 1 }}
     Nop: true
 
 {%- set ns = namespace(phase = iteration * 2) %}
@@ -41,8 +42,8 @@ Actors:
   - *Insert_WMajority_{{i}}
   - *Nop_0
 {%- endfor %}
-{%- if ns.phase + iteration * 2 < total_phase %}
-  - Phase: {{ ns.phase + iteration * 2 }}..{{ total_phase - 1 }}
+{%- if ns.phase + iteration * 2 < total_ns.total_phase %}
+  - Phase: {{ ns.phase + iteration * 2 }}..{{ total_ns.total_phase - 1 }}
     Nop: true
 
 {%- endif %}
@@ -62,7 +63,7 @@ Actors:
       OperationCommand:
         drop: myCollection
         writeConcern: {w: majority}
-{%- for i in range((total_phase - 2) // 2) %}
+{%- for i in range((total_ns.total_phase - 2) // 2) %}
   - *Nop_0
   - *DropCollection
 {%- endfor %}
