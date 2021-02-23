@@ -22,16 +22,24 @@ docData: &docData {
               # j: *randomInt
           }
 
+docDataUpdate: &docDataUpdate {
+    "$set": { text: {^FastRandomString: {length: 1000}} },
+    "$inc": { a: 1, b: 1, c: 1, d: 1, e: 1 }
+    }
+    
 {%- set total_ns = namespace(total_phase = (threads|length) * (iteration * 1) + 0) %}
 Actors:
-- Name: ParallelIndexedUpdate-1
+- Name: ParallelIndexedUpdate-{{ threads[0] }}
   Type: RunCommand
-  Threads: 1
+  Threads: {{ threads[0] }}
   Phases:
 {%- for i in range(iteration) %}
   - &Update_WMajority_{{i}}
     MetricsName: Update_WMajority_{{i}}
+    # used by failover test
+    # Duration: 510 seconds
     Duration: 30 seconds
+    ThrowOnFailure: false
     Database: test
     Operations:
     - OperationName: RunCommand
@@ -41,8 +49,10 @@ Actors:
         updates: [
             # { q: {a: *randomId}, u: { "$set": *docData, "$inc": {f: 1}} },
             { q: {_id: *randomId}, u: *docData, },
+            # { q: {_id: *randomId}, u: *docDataUpdate, },
         ]
-        writeConcern: {w: majority}
+        # writeConcern: {w: majority}
+        writeConcern: {w: 1, j: false}
         # writeConcern: {w: majority, j: false}
 {%- endfor %}
 {%- if (threads|length) > 1 %}
@@ -52,7 +62,7 @@ Actors:
 
 {%- set ns = namespace(start_phase = iteration * 1 + 0) %}
 {% for t in threads -%}
-{%- if t == 1 %}{% continue %}{% endif %}
+{%- if t == threads[0] %}{% continue %}{% endif %}
 - Name: ParallelIndexedUpdate-{{ t }}
   Type: RunCommand
   Threads: {{ t }}

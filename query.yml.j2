@@ -1,0 +1,63 @@
+SchemaVersion: 2018-07-01
+Owner: "@mongodb/repl"
+
+Clients:
+  Default:
+    QueryOptions:
+      maxPoolSize: 10000
+
+randomId: &randomId {^RandomInt: {min: 0, max: 1000000}}
+
+{%- set total_ns = namespace(total_phase = (threads|length) * (iteration * 1) + 0) %}
+Actors:
+- Name: ParallelQuery-1
+  Type: RunCommand
+  Threads: 1
+  Phases:
+{%- for i in range(iteration) %}
+  - &Query_{{i}}
+    MetricsName: Query_{{i}}
+    Duration: 30 seconds
+    Database: test
+    Operations:
+    - OperationName: RunCommand
+      OperationIsQuiet: true
+      OperationCommand:
+        find: myIndexedUpdateCollection
+        filter: { _id: *randomId }
+        projection: { text: 0 }
+{%- endfor %}
+{%- if (threads|length) > 1 %}
+  - Phase: {{ iteration * 1 + 0}}..{{ total_ns.total_phase - 1 }}
+    Nop: true
+{% endif %}
+
+{%- set ns = namespace(start_phase = iteration * 1 + 0) %}
+{% for t in threads -%}
+{%- if t == 1 %}{% continue %}{% endif %}
+- Name: ParallelQuery-{{ t }}
+  Type: RunCommand
+  Threads: {{ t }}
+  Phases:
+  - Phase: 0..{{ ns.start_phase - 1}}
+    Nop: true
+{%- for i in range(iteration) %}
+  - *Query_{{i}}
+{%- endfor %}
+{%- if ns.start_phase + iteration * 1 < total_ns.total_phase %}
+  - Phase: {{ ns.start_phase + iteration * 1 }}..{{ total_ns.total_phase - 1 }}
+    Nop: true
+
+{%- endif %}
+{%- set ns.start_phase = ns.start_phase + iteration * 1 %}
+{% endfor %}
+
+AutoRun:
+  Requires:
+    mongodb_setup:
+    - replica
+    - replica-noflowcontrol
+  PrepareEnvironmentWith:
+    mongodb_setup:
+    - replica-delay-mixed
+    - replica

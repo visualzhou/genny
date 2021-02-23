@@ -9,7 +9,7 @@ Clients:
 randomInt: &randomInt {^RandomInt: {min: 0, max: 10000000}}
 randomId: &randomId {^RandomInt: {min: 0, max: 1000000}}
 docData: &docData {
-              text: {^FastRandomString: {length: 1000}},
+              text: {^FastRandomString: {length: 2000}},
               a: *randomInt,
               b: *randomInt,
               c: *randomInt,
@@ -24,9 +24,9 @@ docData: &docData {
 
 {%- set total_ns = namespace(total_phase = (threads|length) * (iteration * 1) + 0) %}
 Actors:
-- Name: ParallelIndexedUpdate-1
+- Name: ParallelIndexedUpdate-{{ threads[0] }}
   Type: RunCommand
-  Threads: 1
+  Threads: {{ threads[0] }}
   Phases:
 {%- for i in range(iteration) %}
   - &Update_WMajority_{{i}}
@@ -40,7 +40,8 @@ Actors:
         find: myIndexedUpdateCollection
         filter: { _id: { "$gte": *randomId } }
         # filter: { _id: { "$in": [*randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId, *randomId ] }, a: { "$gt": 0 } }
-        limit: 100
+        limit: 10
+        batchSize: 100000
         projection: { _id: 1 }
     - OperationName: RunCommand
       OperationIsQuiet: true
@@ -60,7 +61,7 @@ Actors:
 
 {%- set ns = namespace(start_phase = iteration * 1 + 0) %}
 {% for t in threads -%}
-{%- if t == 1 %}{% continue %}{% endif %}
+{%- if t == threads[0] %}{% continue %}{% endif %}
 - Name: ParallelIndexedUpdate-{{ t }}
   Type: RunCommand
   Threads: {{ t }}
